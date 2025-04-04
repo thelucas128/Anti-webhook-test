@@ -1,0 +1,905 @@
+-- Saved by UniversalSynSaveInstance (Join to Copy Games) https://discord.gg/wx4ThpAsmw
+
+local replicatedStorage = game:GetService("ReplicatedStorage")
+local players = game:GetService("Players")
+local global = require(replicatedStorage.SharedModules.Global)
+local repChar = require(script.RepChar)
+local u5 = {
+    ["CharacterMap"] = {},
+    ["LocalRepChar"] = nil
+}
+local u6 = {}
+local u7 = {}
+local u8 = CFrame.new(0, 0.65, 0)
+local u9 = workspace.Ignore
+local u10 = {}
+local u11 = {}
+local u12 = 1
+local u13 = -9000000000
+local u14 = 0
+local u15 = {}
+local u16 = {}
+local u17 = false
+local u18 = {}
+local v21 = {
+    ["__newindex"] = function(_, p19, p20)
+        if p20 then
+            u18[p19] = p20
+        end
+    end,
+    ["__metatable"] = {}
+}
+u5.Flags = setmetatable({}, v21)
+local u22 = u5.Flags
+
+function u5.GetRepChar(p23, p24)
+    if typeof(p24) == "Instance" then
+        if p24:IsA("Model") then
+            return p23.CharacterMap[p24]
+        else
+            return u6[p24]
+        end
+    else
+        return
+    end
+end
+
+function u5.GetRepChars(_)
+    local v25 = {}
+    local v26 = u7
+    __set_list(v25, 1, {unpack(v26)})
+    return v25
+end
+
+function u5.Update(_)
+    for _, v27 in pairs(u6) do
+        v27:Update()
+    end
+    global.Capes:Update()
+end
+function u5.AnimationUpdate(_, p28)
+    os.clock()
+    for _, v29 in ipairs(u7) do
+        v29:UpdateCharacterCollisions()
+        v29.ShouldUpdateIK = nil
+        v29:AnimationUpdate(p28)
+    end
+    debug.profilebegin("RepCharIK")
+    for _, v30 in u7 do
+        if v30.ShouldUpdateIK then
+            if v30.IsReplicated and v30.ReplicatedIK then
+                local v31 = v30.ReplicatedIK
+                local v32, v33, v34, v35 = unpack(v31)
+                v30.IK_RHT = v32
+                v30.IK_RKT = v33
+                v30.IK_LHT = v34
+                v30.IK_LKT = v35
+            end
+            local v36 = global.RepCharIK.UpdateIK
+            local v37 = v30.IsLocalPlayer
+            if v37 then
+                v37 = not v30.IsReplicated
+            end
+            v36(v30, v37)
+        end
+    end
+    debug.profileend()
+end
+function u5.UpdateOverheadIconsAndMarkers(_)
+    for _, v38 in ipairs(u7) do
+        v38:UpdateOverheadIconAndMarker()
+    end
+end
+function u5.UpdateCarriedPlayers(_, _)
+    for _, v39 in ipairs(u7) do
+        if v39.Active and v39.CarriedBy then
+            local v40 = v39.CarriedBy
+            local v41 = v40.Items.CarryAttachment
+            local v42 = v40.State.OnAnimal
+            if v42 then
+                if v39._LastCarryAnimal ~= v42 or not v39._LastCarryAnimalAttachment and tick() - (v39._LastCarryAnimalCheck or 0) > 1 then
+                    v39._LastCarryAnimalCheck = tick()
+                    v39._LastCarryAnimal = v42
+                    v39._LastCarryAnimalAttachment = v42:FindFirstChild("AnimalCarryAttachment", true)
+                end
+                v41 = v39._LastCarryAnimalAttachment or v41
+            else
+                v39._LastCarryAnimal = nil
+            end
+            if v41 then
+                v39.RootPart.CFrame = v41.WorldCFrame
+            end
+        end
+    end
+end
+local u43 = global.Network.FireServer
+function u5.ReplicateCharacters(_, _)
+    local v44 = global.SyncedTime:GetTime()
+    if v44 - u14 > 1 then
+        u14 = v44
+        u43(global.Network, "CamPosReplicate", global.Camera.CameraCFrame.Position)
+    end
+    local v45 = v44 / global.CharRepUtils.ClientRepRate
+    local v46 = math.floor(v45)
+    if v46 ~= u13 then
+        u13 = v46
+        local v47 = u15
+        u15 = {}
+        local v48 = {}
+        local v49 = v46 / 256 % 256
+        local v50 = v46 % 256
+        __set_list(v48, 1, {(string.char(v49, v50))})
+        for _, v51 in ipairs(u7) do
+            if v51.Active and not v51.IsReplicated then
+                local v52 = global.Network:GetReference(v51, "Character")
+                local v53 = v47[v52]
+                if not v53 then
+                    v53 = global.CharRepUtils.CharRepData.new()
+                    v53.Preset = global.CharRepUtils.CharRepData.newPreset()
+                end
+                v47[v52] = nil
+                u15[v52] = v53
+                if v51.ControllingRagdoll then
+                    v53.Preset:SetIsRagdolled(true)
+                    for v54, v55 in ipairs(v51.ReplicatedJoints) do
+                        local v56 = v55.Joint
+                        local v57 = (v55.Part0.CFrame * v56.C0):ToObjectSpace(v55.Part1.CFrame * v56.C1)
+                        v53.Preset:SetJointDataFromCFrame(v54, v57)
+                    end
+                else
+                    v53.Preset:SetIsRagdolled(false)
+                end
+                local v58
+                if v51.IsLocalPlayer then
+                    v58 = v51.CurrentPlatform
+                else
+                    v58 = v51.LastRelativeTo
+                end
+                local v59 = v51.RootPart.CFrame
+                if v58 then
+                    v53.Preset:SetPlatformId(v58.Id)
+                    v53.Preset:SetRootCFrame(v58:GetCFrame():ToObjectSpace(v59))
+                else
+                    v53.Preset:SetPlatformId(-1)
+                    v53.Preset:SetRootCFrame(v59)
+                end
+                v53.Preset:SetLegIK(v51.IK_RHT or 0, v51.IK_RKT or 0, v51.IK_LHT or 0, v51.IK_LKT or 0)
+                local v60 = u18
+                local v61 = u5.Flags ~= u22
+                u18 = {}
+                v53.Preset:SetFlags((v60.LowerStamina == nil and 0 or 1) + (v60.DamageSelf == nil and 0 or 2) + (v60.CharacterReplicate == nil and v60.ClientEvent == nil and 0 or 4) + (v61 and 8 or 0))
+                local v62 = v53:Update(v53.Preset, true)
+                if v62 then
+                    table.insert(v48, v52)
+                    table.insert(v48, v62)
+                end
+            end
+        end
+        for v63 in pairs(v47) do
+            table.insert(v48, v63)
+            table.insert(v48, "\0")
+        end
+        u43(global.Network, "CharUpdate", table.concat(v48))
+    end
+end
+local u64 = workspace.WORKSPACE_Trains.RunningTrains
+local u65 = workspace.WORKSPACE_Entities.Players
+local u66 = RaycastParams.new()
+u66.CollisionGroup = "PlayerCharacters"
+u66.FilterType = Enum.RaycastFilterType.Blacklist
+u66.IgnoreWater = true
+local u67 = {
+    Vector3.new(0, -0.4, 0),
+    Vector3.new(0, -0.4, 0.4),
+    Vector3.new(0, -0.4, -0.4),
+    Vector3.new(-0.4, -0.4, -0.4),
+    Vector3.new(-0.4, -0.4, 0.4),
+    Vector3.new(0.4, -0.4, -0.4),
+    Vector3.new(0.4, -0.4, 0.4)
+}
+function DoHumanRay(p68, p69, p70)
+    u66.FilterDescendantsInstances = p70
+    for _ = 1, 20 do
+        local v71 = workspace:Raycast(p68, p69, u66)
+        if not v71 then
+            return nil
+        end
+        local v72 = v71.Instance
+        if not v72 or v72.CanCollide then
+            return v72, v71.Position, v71.Normal, v71.Material
+        end
+        p70[#p70 + 1] = v72
+        u66.FilterDescendantsInstances = p70
+    end
+    return nil
+end
+function UpdateLocalCharPlatform(p73, p74)
+    if p74 then
+        p73.FloorPlatform = nil
+    end
+    local v75 = p73.Human
+    if v75:GetState() == Enum.HumanoidStateType.Swimming or global.SharedUtils.IsInWater(p73.RootPart.Position) then
+        p73.FloorPlatform = nil
+        p73.CurrentPlatform = nil
+        p73.LastWasGrounded = false
+    else
+        local v76 = v75.HipHeight
+        local v77 = p73.RootPart
+        local v78 = v77.CFrame
+        local v79 = v77.Size
+        local v80 = p73.LastWasGrounded
+        local v81 = { p73.Model }
+        local v82 = -(v80 and v79.Y / 2 + v76 * 1.5 or v79.Y / 10 + v76)
+        local v83 = Vector3.new(0, v82, 0)
+        local v84 = nil
+        for _, v85 in pairs(u67) do
+            v84 = DoHumanRay(v78 * (v79 * v85), v83, v81)
+            if v84 then
+                break
+            end
+        end
+        p73.LastWasGrounded = v84 ~= nil and true or nil
+        local v86 = nil
+        if v84 then
+            local v87 = p73.LastFloorPlatform
+            if v84 ~= p73.LastFloorPart then
+                v87 = global.ClientPlatforms:GetPlatformFromPart(v84)
+                p73.LastFloorPart = v84
+                p73.LastFloorPlatform = v87
+                if v87 and p73.LastFloorPart.Name == "Gangplank" then
+                    p73.CustomFloorMove = v84
+                    p73.LastCustomFloorMove = nil
+                else
+                    p73.CustomFloorMove = nil
+                end
+            end
+            v86 = v87 or (global.ClientPlatforms:GetAnchorablePlatform(v84) or global.ClientPlatforms:GetRagdollPlatform(v84))
+            if not v86 and v84:IsDescendantOf(u65) then
+                local v88 = v84.Parent
+                while v88 ~= u65 do
+                    v88 = v88.Parent
+                end
+                local v89 = u5:GetRepChar(v88)
+                if v89 and v89.LastRelativeTo then
+                    v86 = p73.LastRelativeTo
+                end
+            end
+            if v86 then
+                p73.FloorPlatform = v86
+            end
+        else
+            p73.LastFloorPart = nil
+            p73.LastFloorPlatform = nil
+            p73.CustomFloorMove = nil
+        end
+        if v86 or not (v84 and p73.FloorPlatform) then
+            p73.PlatformUnanchorCounter = nil
+        else
+            p73.PlatformUnanchorCounter = (p73.PlatformUnanchorCounter or 0) + 1
+            if p73.PlatformUnanchorCounter >= 0 then
+                p73.PlatformUnanchorCounter = nil
+                p73.FloorPlatform = nil
+            end
+        end
+        local v90 = nil
+        local v91 = global.WildLife.RidingAnimal
+        local v92 = global.ClientPlatforms:GetRagdollPlatform(p73.Model)
+        if v91 then
+            v90 = global.ClientPlatforms:GetAnchorablePlatform(v91.collisionpart)
+        elseif v92 then
+            v90 = v92
+        elseif p73.FloorPlatform then
+            v90 = p73.FloorPlatform
+        end
+        p73.CurrentPlatform = v90
+    end
+end
+u5._UpdateLocalCharPlatform = UpdateLocalCharPlatform
+function UpdateReplicatedChar(p93, p94)
+    --[[
+    Upvalues:
+        [1] = global
+        [2] = u8
+        [3] = u10
+        [4] = u12
+        [5] = u11
+    --]]
+    if not p93.Active then
+        return
+    end
+    if not p93.IsLocalPlayer and p93.IsRagdolled then
+        p93.LastRelativeTo = global.ClientPlatforms:GetRagdollPlatform(p93.Model)
+    end
+    p93:UpdateRootAnchored()
+    if p93.CurrentSeat then
+        local v95 = p93.CurrentSeat.Att.WorldCFrame * u8
+        local v96 = p93.State.GatlingGun
+        if v96 then
+            local v97 = global.ClientGatlingGuns:GetGun(v96)
+            if v97 then
+                local _, v98 = v97:GetAngleGoals()
+                v95 = v95 * CFrame.new(0, 0, -p93.CurrentSeat.Att.Position.Z) * CFrame.Angles(0, v98, 0) * CFrame.new(0, 0, p93.CurrentSeat.Att.Position.Z)
+            end
+        end
+        u10[u12] = p93.RootPart
+        u11[u12] = v95
+        u12 = u12 + 1
+        return
+    end
+    if p93.RiderPart then
+        u10[u12] = p93.RootPart
+        u11[u12] = p93.RiderPart.CFrame * p93.RiderOffset
+        u12 = u12 + 1
+        return
+    end
+    if not p93.IsReplicated or (p93.CarriedBy or (p93.State.OnAnimal or p93.CurrentSeat)) then
+        return
+    end
+    if p93.LocalForceCFrame then
+        u10[u12] = p93.RootPart
+        u11[u12] = p93.LocalForceCFrame
+        u12 = u12 + 1
+        return
+    end
+    local v99 = 1 / (p94 * 60)
+    local v100 = p93.ReplicatedCFrames
+    if v100 and #v100 > 0 then
+        local v101 = p93.RootPart.CFrame
+        local v102 = v100[1].ServerTime + (os.clock() - v100[1].ClientTime) - global.CharRepUtils.CharAddedLatency
+        local v103 = nil
+        local v104 = false
+        local v105 = nil
+        local v106 = nil
+        local v107 = nil
+        for v108, v109 in ipairs(v100) do
+            local v110 = v109.ServerTime <= v102
+            if v110 or v108 == #v100 then
+                local v111 = v109.Platform
+                if v111 then
+                    v111 = v109.Platform:GetCFrame()
+                end
+                v103 = v109.RootCFrame
+                v107 = v109.Platform
+                v106 = v111 or CFrame.new()
+                if p93.LastRelativeTo then
+                    v105 = v106:ToObjectSpace(p93.LastRelativeTo:GetCFrame() * p93.LastRelativeOrigin:ToObjectSpace(v101))
+                else
+                    v105 = v106:ToObjectSpace(v101)
+                end
+                v104 = (v103.Position - v105.Position).Magnitude > 20
+                if v110 and v108 ~= 1 then
+                    local v112 = v100[v108 - 1]
+                    local v113 = v109.ServerTime
+                    if v112.ServerTime - v113 > 0.5 then
+                        v113 = v112.ServerTime - global.CharRepUtils.ServerRepRate
+                    end
+                    local v114 = v112.ServerTime - v113
+                    local v115 = (v102 - v113) / v114
+                    v103 = v103:Lerp(v112.Platform == v109.Platform and v112.RootCFrame or v106:ToObjectSpace(v112.Platform and v112.Platform:GetCFrame() * v112.RootCFrame or v112.RootCFrame), (math.clamp(v115, 0, 1)))
+                end
+                break
+            end
+        end
+        local v116 = v106 * v105:Lerp(v103, v104 and 1 or 0.5 ^ v99)
+        if v101 ~= v116 then
+            u10[u12] = p93.RootPart
+            u11[u12] = v116
+            u12 = u12 + 1
+        end
+        p93.LastRelativeTo = v107
+        p93.LastRelativeOrigin = v106
+    end
+    if p93.ReplicatedJointData then
+        local v117 = p93.ReplicatedJointData
+        for v118, v119 in ipairs(p93.ReplicatedJoints) do
+            v119.Joint.Transform = v119.Joint.Transform:Lerp(v117[v118], 0.4 ^ v99)
+        end
+    end
+end
+function UpdateLocalChar(p120, _)
+    --[[
+    Upvalues:
+        [1] = global
+        [2] = u64
+        [3] = u5
+        [4] = u10
+        [5] = u12
+        [6] = u11
+    --]]
+    if p120.Active then
+        UpdateLocalCharPlatform(p120)
+        local v121 = p120.CurrentPlatform
+        if p120.IsReplicated or (p120.CarriedBy or not v121) then
+            p120._LastRootCFrame = nil
+        else
+            local v122 = p120._LastRootCFrame
+            p120._LastRootCFrame = p120.RootPart.CFrame
+            if v122 then
+                local v123 = Ray.new(v122.Position, p120.RootPart.Position - v122.Position)
+                local v124 = workspace:FindPartOnRayWithWhitelist(v123, { workspace.WORKSPACE_Trains.TrainTeleports })
+                if v124 and v124.Name == "TrainTeleportPart" then
+                    p120:SetSeat(nil)
+                    p120:Teleport(v124.Target.WorldCFrame)
+                    global.Network:FireServer("ACHitTrainTeleportPart", v124)
+                    return
+                end
+            end
+            local v125 = v121.LastDiff
+            if v125 then
+                if p120.CustomFloorMove then
+                    local v126 = p120.CustomFloorMove
+                    local v127 = v126.CFrame
+                    if v126 == p120.LastCustomFloorMove then
+                        v125 = v127 * (v121:GetCFrame() * p120.LastCustomFloorMoveCFrame):Inverse() * v125
+                    end
+                    p120.LastCustomFloorMove = v126
+                    p120.LastCustomFloorMoveCFrame = v121:GetCFrame():Inverse() * v127
+                end
+                if global.Params.ApplyPlatformDiffToRagdollImpacts then
+                    global.RagdollImpactListeners:ApplyPlatformDiff(p120.Model, v125)
+                end
+                if not (p120.IsRagdolled or p120.CurrentSeat) then
+                    local v128 = {
+                        workspace.WORKSPACE_Interactables["LaGrande Riverboat"],
+                        u64,
+                        workspace.Ignore,
+                        workspace.WORKSPACE_Entities.Players
+                    }
+                    local v129 = p120.RootPart.CFrame
+                    local v130 = v125 * v129
+                    local _, v131 = v129:ToObjectSpace(v130):ToEulerAnglesYXZ()
+                    local v132 = CFrame.Angles(0, v131, 0) * (v129 - v129.Position) + v130.Position
+                    local v133 = v129.Position
+                    local v134 = v132.Position - v129.Position
+                    local v135 = v134 + v134.Unit * 0.5
+                    local v136 = p120.RootPart
+                    local v137 = nil
+                    local v138
+                    if v137 then
+                        v138 = nil
+                    else
+                        v137, v138 = DoHumanRay(p120.Items.Head.Position, v135, v128)
+                        if v137 then
+                            v136 = p120.Items.Head
+                        end
+                    end
+                    if not v137 then
+                        v137, v138 = DoHumanRay(v133, v135, v128)
+                    end
+                    if not v137 then
+                        local v139 = CFrame.new(v133, v133 + v135)
+                        for v140 = -1, 1, 2 do
+                            local v141 = DoHumanRay
+                            local v142 = v140 * 0.5
+                            v137, v138 = v141(v139 * Vector3.new(v142, -0.5, 0), v135, v128)
+                            if not v137 then
+                                local v143 = DoHumanRay
+                                local v144 = v140 * 0.5
+                                v137, v138 = v143(v139 * Vector3.new(v144, 0.5, 0), v135, v128)
+                            end
+                            if v137 then
+                                break
+                            end
+                        end
+                    end
+                    if v137 then
+                        local v145 = v129.Position + v135.Unit * (v135.Unit:Dot(v138 - v129.Position) - 1) - v132.Position
+                        local v146 = u5.Flags
+                        local v147 = v145 / v121.UpdateTime
+                        if v147.Magnitude > 15 then
+                            global.PlayerCharacter:Ragdoll(v136, true, v136.Position, (v147.Unit + Vector3.new(0, 0.1, 0)).Unit, 200)
+                            global.Network:FireServer("DamageSelf", v147.Magnitude)
+                            v146.DamageSelf = v147.Magnitude
+                            global.Trains.TrainSmackEffect(v147.Magnitude / 2)
+                            p120.CurrentPlatform = nil
+                        end
+                        v132 = v132 + v145
+                    end
+                    u10[u12] = p120.RootPart
+                    u11[u12] = v132
+                    u12 = u12 + 1
+                end
+                local v148 = workspace.CurrentCamera
+                local v149 = v148.CFrame:Inverse() * v148.Focus
+                global.Camera:SetCameraCFrame(v148.CFrame * v149 * (v125 - v125.p) * v149:Inverse())
+            end
+        end
+    else
+        p120._LastRootCFrame = nil
+        return
+    end
+end
+function CharUpdate(p150)
+    --[[
+    Upvalues:
+        [1] = u12
+        [2] = u7
+        [3] = u5
+        [4] = u10
+        [5] = u11
+    --]]
+    u12 = 1
+    for _, v151 in ipairs(u7) do
+        UpdateReplicatedChar(v151, p150)
+    end
+    local _ = u5.LocalRepChar
+    UpdateLocalChar(u5.LocalRepChar, p150)
+    if u12 > 1 then
+        for v152 = #u10, u12, -1 do
+            u10[v152] = nil
+            u11[v152] = nil
+        end
+        workspace:BulkMoveTo(u10, u11, Enum.BulkMoveMode.FireCFrameChanged)
+    end
+end
+function PostCharUpdate(p153, p154)
+    --[[
+    Upvalues:
+        [1] = global
+        [2] = u16
+    --]]
+    local v155 = u16[global.Network:GetReference(p153, "Character")]
+    if p153._LocalCarriedBy == false then
+        p153:SetLocalCarriedBy(nil)
+    end
+    if v155 then
+        if not p153.ReplicatedCFrames then
+            p153.ReplicatedCFrames = {}
+        end
+        local v156 = v155:GetPlatformId()
+        if v156 then
+            v156 = global.ClientPlatforms:GetPlatform(v156)
+        end
+        local v157
+        if v156 then
+            v157 = v156:GetCFrame()
+        else
+            v157 = v156
+        end
+        local v158 = v155:GetRootCFrame()
+        local v159, v160, v161, v162 = v155:GetLegIK()
+        if not p153.ReplicatedIK then
+            p153.ReplicatedIK = {}
+        end
+        p153.ReplicatedIK[1] = v159
+        p153.ReplicatedIK[2] = v160
+        p153.ReplicatedIK[3] = v161
+        p153.ReplicatedIK[4] = v162
+        local v163 = p153.ReplicatedCFrames
+        local v164 = {
+            ["Platform"] = v156,
+            ["PlatformCFrame"] = v157,
+            ["RootCFrame"] = v158,
+            ["ServerTime"] = p154,
+            ["ClientTime"] = os.clock()
+        }
+        table.insert(v163, 1, v164)
+        if #p153.ReplicatedCFrames >= 10 then
+            table.remove(p153.ReplicatedCFrames)
+        end
+        if v155:IsRagdolled() then
+            p153.ReplicatedJointData = v155:GetJointCFrames()
+        else
+            p153.ReplicatedJointData = nil
+        end
+    else
+        p153.ReplicatedCFrames = nil
+        p153.ReplicatedJointData = nil
+        return
+    end
+end
+global:BindToGameInit(-100, function() --[[Anonymous function at line 721]]
+    --[[
+    Upvalues:
+        [1] = u6
+        [2] = repChar
+        [3] = u7
+        [4] = u17
+        [5] = players
+        [6] = global
+        [7] = u5
+    --]]
+    local function v168(p165) --[[Anonymous function at line 722]]
+        --[[
+        Upvalues:
+            [1] = u6
+            [2] = repChar
+            [3] = u7
+            [4] = u17
+        --]]
+        if not u6[p165] then
+            local v166 = repChar.new(p165)
+            local v167 = u7
+            table.insert(v167, v166)
+            u6[p165] = v166
+            if u17 then
+                v166:Init()
+            end
+        end
+    end
+    local function v171(p169) --[[Anonymous function at line 734]]
+        --[[
+        Upvalues:
+            [1] = u6
+            [2] = u7
+        --]]
+        local v170 = u6[p169]
+        if v170 then
+            table.remove(u7, table.find(u7, v170))
+            u6[p169] = nil
+            v170:Dispose()
+        end
+    end
+    players.PlayerAdded:Connect(v168)
+    players.PlayerRemoving:Connect(v171)
+    for _, v172 in pairs(players:GetPlayers()) do
+        global.Thread.Spawn(v168, v172)
+    end
+    u5.LocalRepChar = u5:GetRepChar(global.LocalPlayer)
+end)
+global:BindToGameLoaded(function() --[[Anonymous function at line 751]]
+    --[[
+    Upvalues:
+        [1] = u17
+        [2] = u7
+        [3] = global
+        [4] = u5
+        [5] = u9
+        [6] = u16
+    --]]
+    u17 = true
+    for _, v173 in ipairs(u7) do
+        v173:Init()
+    end
+    global.Ragdolls.RagdollStateChanged:Connect(function(p174, p175) --[[Anonymous function at line 760]]
+        --[[
+        Upvalues:
+            [1] = u5
+        --]]
+        local v176 = u5:GetRepChar(p174)
+        if v176 then
+            v176.IsRagdolled = p175
+            v176:UpdateRagdollControl()
+        end
+    end)
+    global.ReplicatedState:GetStateChangedSignal("CurrentQuest"):Connect(function() --[[Anonymous function at line 770]]
+        --[[
+        Upvalues:
+            [1] = u5
+        --]]
+        u5:UpdateOverheadIconsAndMarkers()
+    end)
+    global.ReplicatedState:GetStateChangedSignal("CurrentFactionId"):Connect(function() --[[Anonymous function at line 774]]
+        --[[
+        Upvalues:
+            [1] = u5
+        --]]
+        u5:UpdateOverheadIconsAndMarkers()
+    end)
+    global.Settings:Bind("InstrumentsEnabled", function() --[[Anonymous function at line 778]]
+        --[[
+        Upvalues:
+            [1] = u7
+        --]]
+        for _, v177 in ipairs(u7) do
+            v177:UpdateInstrumentMuted()
+        end
+    end)
+    global:BindToRenderStep("CarryUpdate", global.EventPriority.First, u5.UpdateCarriedPlayers, u5)
+    global:BindToStepped("CharReplicate", global.EventPriority.First + 2, u5.ReplicateCharacters, u5)
+    global:BindToStepped("RepChar AnimationUpdate", global.EventPriority.Animation + 1, u5.AnimationUpdate, u5)
+    global:BindToHeartbeat("CharUpdate", 1, CharUpdate)
+    global:BindToHeartbeat("RepChar Update", global.EventPriority.Character, u5.Update, u5)
+    local v207 = {
+        [{
+            "FootStep",
+            "LeftFoot",
+            "RightFoot",
+            "LeftHand",
+            "RightHand"
+        }] = {
+            ["MaxDistance"] = false,
+            function(p178, p179) --[[Anonymous function at line 800]]
+                --[[
+                Upvalues:
+                    [1] = global
+                --]]
+                local v180 = p178.Rig:FindFirstChild(p179)
+                if v180 then
+                    global.AFX.Footstep(v180, p178.Rig)
+                end
+            end
+        },
+        ["Clap"] = {
+            ["MaxDistance"] = 100,
+            function(p181) --[[Anonymous function at line 810]]
+                --[[
+                Upvalues:
+                    [1] = u5
+                    [2] = global
+                --]]
+                local v182 = u5:GetRepChar(p181.Rig)
+                if v182 and v182.Active then
+                    local v183 = v182.RootPart
+                    global.ClientSoundHandler:PlaySFX(v183, "Emotes.Clap", {
+                        ["Pitch"] = global.RNG:NextNumber(0.99, 1.01)
+                    })
+                end
+            end
+        },
+        ["RollImpact"] = {
+            ["MaxDistance"] = 100,
+            function(p184) --[[Anonymous function at line 823]]
+                --[[
+                Upvalues:
+                    [1] = u5
+                    [2] = u9
+                    [3] = global
+                --]]
+                local v185 = u5:GetRepChar(p184.Rig)
+                if v185 and v185.Active then
+                    local v186 = v185.RootPart
+                    local v187 = Ray.new(v186.Position, Vector3.new(0, -10, 0))
+                    local v188, v189, v190, v191 = workspace:FindPartOnRayWithIgnoreList(v187, { v185.Model, u9 }, false, true)
+                    if v188 then
+                        local v192 = v191.Name
+                        local v193 = "RagdollImpacts." .. v192
+                        if global.ClientSoundHandler:HasSFX(v193) then
+                            local v194 = v186.Velocity * Vector3.new(1, 0, 1)
+                            local v195 = true
+                            if v192 == "Sand" or v192 == "Limestone" then
+                                global.VFX.LocalCreateDust(v189, v194, Color3.fromRGB(255, 203, 139))
+                            elseif v192 == "Ground" then
+                                global.VFX.LocalCreateDust(v189, v194, Color3.fromRGB(155, 105, 47))
+                            elseif v192 == "Mud" then
+                                local v196 = CFrame.new(v189, v189 + v190)
+                                global.VFX.CreateMudSplash(v196)
+                                v195 = false
+                            end
+                            if v195 then
+                                local v197, v198 = global.SharedUtils.GetVolumeAndPitchFromVelocity(v194.Magnitude)
+                                global.ClientSoundHandler:PlaySFX(v186, v193, {
+                                    ["Volume"] = v197,
+                                    ["PitchShift"] = v198
+                                })
+                            end
+                        end
+                    else
+                        return
+                    end
+                else
+                    return
+                end
+            end
+        },
+        ["Loop"] = function(p199) --[[Function name: Loop, line 864]]
+            --[[
+            Upvalues:
+                [1] = u5
+                [2] = global
+            --]]
+            local v200 = u5:GetRepChar(p199.Rig)
+            if v200 and v200.Active then
+                local v201 = v200.State.LassoPower or 0
+                global.ClientSoundHandler:LocalPlayCharacterSound(v200.Model, "Woosh", {
+                    ["PlaybackSpeed"] = global.Mathf.Lerp(0.9, 1.1, v201),
+                    ["Octave"] = global.Mathf.Lerp(0.965, 1.04, v201)
+                })
+            end
+        end,
+        ["Whistle"] = function(p202) --[[Function name: Whistle, line 878]]
+            --[[
+            Upvalues:
+                [1] = u5
+                [2] = global
+            --]]
+            local v203 = u5:GetRepChar(p202.Rig)
+            if v203 and v203.Active then
+                global.ClientSoundHandler:LocalPlayCharacterSound(v203.Model, "Whistle", {
+                    ["PlaybackSpeed"] = global.RNG:NextNumber(0.9, 1.1)
+                })
+            end
+        end,
+        ["SpurKick"] = function(p204) --[[Function name: SpurKick, line 887]]
+            --[[
+            Upvalues:
+                [1] = u5
+                [2] = global
+            --]]
+            local v205 = u5:GetRepChar(p204.Rig)
+            if v205 and v205.Active then
+                global.ClientSoundHandler:LocalPlayCharacterSound(v205.Model, "SpurKick", {
+                    ["PlaybackSpeed"] = global.RNG:NextNumber(0.9, 1.1)
+                })
+                local v206 = v205.IsLocalPlayer and global.WildLife:GetRidingAnimal()
+                if v206 then
+                    v206:Boost()
+                    global.Camera:Vibrate(0.0017453292519943296, 0.2, 0.05)
+                    v206.AnimationHandler:PlayTrack("Spur")
+                end
+            end
+        end
+    }
+    global.AnimationHandler:BindToKeyframe(v207)
+    local v234 = {
+        ["CharUpdate"] = function(p208) --[[Function name: CharUpdate, line 908]]
+            --[[
+            Upvalues:
+                [1] = global
+                [2] = u16
+            --]]
+            local v209, v210 = string.byte(p208, 1, 2)
+            local v211 = global.SyncedTime:GetTime() / global.CharRepUtils.ServerRepRate
+            local v212 = math.floor(v211)
+            local v213 = v212 % 65536
+            local v214 = v209 * 256 + v210
+            local v215 = v212 - v213
+            local v216 = v213 < v214 - 32768 and v214 - 65536
+            if v216 then
+                v214 = v216
+            elseif v214 + 32768 < v213 then
+                v214 = v214 + 65536 or v214
+            end
+            local v217 = (v215 + v214) * global.CharRepUtils.ServerRepRate
+            local v218 = global.CharRepUtils.ReadUpdate(u16, p208, 3)
+            for v219 in pairs(v218) do
+                local v220 = global.Network:GetObject(v219, "Character")
+                if v220 then
+                    PostCharUpdate(v220, v217)
+                end
+            end
+        end,
+        ["DespawnCharacter"] = function(p221) --[[Function name: DespawnCharacter, line 932]]
+            --[[
+            Upvalues:
+                [1] = global
+            --]]
+            local v222 = global.Network:GetObject(p221, "Character")
+            if v222 then
+                v222:DisposeModel()
+            end
+        end,
+        ["ACDTRequest"] = function(p223) --[[Function name: ACDTRequest, line 941]]
+            --[[
+            Upvalues:
+                [1] = global
+            --]]
+            global.Network:FireServer("ACDTResponse", p223)
+        end,
+        ["ACTrigger"] = function(p224, p225) --[[Function name: ACTrigger, line 944]]
+            --[[
+            Upvalues:
+                [1] = u5
+            --]]
+            local v226 = u5.LocalRepChar
+            v226:Teleport(p224)
+            local v227 = v226.RootPart
+            local v228 = 0
+            if not p225 then
+                local v229 = v226.RootPart.Velocity.Y
+                p225 = math.clamp(v229, -200, -10)
+            end
+            v227.Velocity = Vector3.new(v228, p225, 0)
+            v226.RootPart.RotVelocity = Vector3.new()
+        end,
+        ["ACTeleport"] = function(p230) --[[Function name: ACTeleport, line 951]]
+            --[[
+            Upvalues:
+                [1] = u5
+            --]]
+            u5.LocalRepChar:Teleport(p230)
+        end,
+        ["ACTriggerLasso"] = function(p231, p232) --[[Function name: ACTriggerLasso, line 956]]
+            --[[
+            Upvalues:
+                [1] = global
+            --]]
+            local v233 = global.Network:GetObject(p231, "Character")
+            if v233 then
+                v233:Teleport(p232)
+            end
+        end
+    }
+    global.Network:BindEvents(v234)
+end)
+return u5
